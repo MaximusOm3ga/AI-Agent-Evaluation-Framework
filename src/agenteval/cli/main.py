@@ -83,7 +83,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         repository.save_run(case.run, case.trace)
     for case in result.cases:
         repository.save_evaluation_results(case.run.id, case.results)
-    print(result.summary().summary())
+    print(result.detailed_summary())
     return 0
 
 

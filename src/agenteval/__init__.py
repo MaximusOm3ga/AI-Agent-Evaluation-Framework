@@ -1,3 +1,7 @@
+from .env import load_env
+
+load_env()
+
 from .core.models import Dataset, DatasetCase, Event, EventType, Run, Trace
 from .core.results import EvaluationResult, EvaluationSummary
 from .core.runner import EvaluationSuite, evaluate, evaluate_async

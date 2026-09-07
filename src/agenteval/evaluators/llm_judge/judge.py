@@ -12,7 +12,7 @@ from ...core.results import EvaluationResult
 
 @dataclass(slots=True)
 class JudgeConfig:
-    model: str = "gpt-4o-mini"
+    model: str = "llama-3.1-8b-instant"
     provider: str = "mock"
     system_prompt: str = "You are a careful evaluator. Assess the answer against the system instructions and provide structured JSON."
     evaluation_prompt: str = "Assess the agent output for correctness and completeness."
@@ -24,6 +24,12 @@ class JudgeConfig:
     )
     api_key: str | None = None
     base_url: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.provider.lower() == "groq":
+            override = os.getenv("GROQ_MODEL")
+            if override:
+                self.model = override
 
 
 class LLMJudge(Evaluator):

@@ -78,6 +78,50 @@ class EvaluationRunResult:
     def summary(self) -> EvaluationSummary:
         return EvaluationSummary(case_count=len(self.cases), results=self.all_results())
 
+    def detailed_summary(self) -> str:
+        lines: list[str] = [
+            f"Dataset: {self.dataset.name} ({len(self.cases)} case(s))",
+            "",
+        ]
+        for case_result in self.cases:
+            run = case_result.run
+            case = case_result.case
+            duration_text = "n/a" if run.duration is None else f"{run.duration:.3f}s"
+            lines.append(f"Case {case.id}: status={run.status} | duration={duration_text}")
+            lines.append(f"  Input: {case.input}")
+            if case.expected is not None:
+                lines.append(f"  Expected: {case.expected}")
+            lines.append(f"  Output: {run.output}")
+            lines.append("  Trace:")
+            for event in case_result.trace.ordered_events():
+                event_label = f"{event.type.value if hasattr(event.type, 'value') else event.type}"
+                if event.name:
+                    event_label += f"/{event.name}"
+                details = []
+                if event.input is not None:
+                    details.append(f"input={event.input}")
+                if event.output is not None:
+                    details.append(f"output={event.output}")
+                if event.error is not None:
+                    details.append(f"error={event.error}")
+                if event.metadata:
+                    details.append(f"metadata={event.metadata}")
+                suffix = " | " + " | ".join(details) if details else ""
+                lines.append(f"    - {event_label}{suffix}")
+            for eval_result in case_result.results:
+                status = "PASS" if eval_result.passed is True else "FAIL" if eval_result.passed is False else "N/A"
+                score_text = "n/a" if eval_result.score is None else f"{eval_result.score:.3f}"
+                lines.append(
+                    f"  - {eval_result.evaluator}: score={score_text}, status={status}, "
+                    f"explanation={eval_result.explanation}"
+                )
+                if eval_result.metadata:
+                    lines.append(f"    metadata={eval_result.metadata}")
+            lines.append("")
+        lines.append("Aggregate metrics:")
+        lines.extend(self.summary().detailed_summary().splitlines())
+        return "\n".join(lines).rstrip()
+
 
 async def evaluate_async(
     agent: Callable[..., Any],

@@ -10,7 +10,9 @@ from agenteval import (
     AnswerCorrectness,
     Dataset,
     DatasetCase,
+    EvaluationResult,
     EvaluationSuite,
+    EvaluationSummary,
     ExactMatch,
     EventType,
     JudgeConfig,
@@ -91,6 +93,40 @@ def test_async_evaluate_works():
     result = asyncio.run(evaluate_async(agent=agent, dataset=build_dataset(), suite=suite))
     assert result.summary().metric("TaskSuccess") == 1.0
     assert result.summary().metric("ExactMatch") == 1.0
+
+
+def test_detailed_summary_includes_case_breakdown():
+    def agent(task, tracer=None):
+        return "42"
+
+    result = evaluate(agent=agent, dataset=build_dataset(), suite=EvaluationSuite([TaskSuccess(), ExactMatch()]))
+    text = result.detailed_summary()
+    assert "Dataset: research" in text
+    assert "Case case-1" in text
+    assert "TaskSuccess" in text
+    assert "ExactMatch" in text
+    assert "Trace:" in text
+    assert "Aggregate metrics:" in text
+
+
+def test_summary_detailed_output_lists_pass_fail_and_metadata():
+    summary = EvaluationSummary(
+        case_count=1,
+        results=[
+            EvaluationResult(
+                evaluator="TaskSuccess",
+                score=1.0,
+                passed=True,
+                explanation="matched",
+                metadata={"raw_output": {"score": 4, "passed": True}},
+            )
+        ],
+    )
+    text = summary.detailed_summary()
+    assert "TaskSuccess" in text
+    assert "avg=100.0%" in text
+    assert "matched" in text
+    assert "raw_output" in text
 
 
 def test_storage_round_trip(tmp_path: Path):
