@@ -4,7 +4,7 @@ load_env()
 
 from .core.models import Dataset, DatasetCase, Event, EventType, Run, Trace
 from .core.results import EvaluationResult, EvaluationSummary
-from .core.runner import EvaluationSuite, evaluate, evaluate_async
+from .core.runner import EvaluationSuite, evaluate, evaluate_async, evaluate_inbox_entry, evaluate_inbox_entry_sync, ingest_mirror_entry
 from .evaluators.deterministic import (
     AnswerCorrectness,
     Cost,
@@ -47,5 +47,8 @@ __all__ = [
     "default_tracer",
     "evaluate",
     "evaluate_async",
+    "evaluate_inbox_entry",
+    "evaluate_inbox_entry_sync",
+    "ingest_mirror_entry",
     "trace",
 ]

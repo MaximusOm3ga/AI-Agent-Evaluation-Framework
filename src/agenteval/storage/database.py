@@ -103,6 +103,14 @@ CREATE TABLE IF NOT EXISTS failure_classifications (
     metadata_json TEXT,
     FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS inbox_entries (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status TEXT NOT NULL DEFAULT 'pending'
+);
 """
 
 

@@ -10,6 +10,8 @@ import inspect
 from .evaluator import Evaluator
 from .models import Dataset, DatasetCase, Event, EventType, Run, Trace
 from .results import EvaluationResult, EvaluationSummary
+from ..storage.database import SQLiteDatabase
+from ..storage.repositories import Repository
 from ..tracing.tracer import Tracer, default_tracer
 
 
@@ -182,3 +184,41 @@ def evaluate(
     except RuntimeError:
         return asyncio.run(evaluate_async(agent, dataset, suite, tracer=tracer, experiment_id=experiment_id))
     raise RuntimeError("evaluate() cannot run inside an active event loop; use evaluate_async() instead")
+
+
+async def evaluate_inbox_entry(
+    payload: dict[str, Any],
+    agent: Callable[..., Any],
+    suite: EvaluationSuite,
+    tracer: Tracer | None = None,
+) -> EvaluationRunResult:
+    case = DatasetCase(
+        id=str(payload.get("ticket_id_source") or payload.get("id") or uuid4().hex),
+        input=payload.get("ticket") or payload,
+        expected=payload.get("expected"),
+        metadata={"source": payload.get("source"), "mirrored": True, **(payload.get("metadata") or {})},
+    )
+    dataset = Dataset(id="mirrored-inbox", name="mirrored-inbox", cases=[case])
+    return await evaluate_async(agent, dataset, suite, tracer=tracer, experiment_id=payload.get("experiment_id"))
+
+
+def evaluate_inbox_entry_sync(
+    payload: dict[str, Any],
+    agent: Callable[..., Any],
+    suite: EvaluationSuite,
+    tracer: Tracer | None = None,
+) -> EvaluationRunResult:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(evaluate_inbox_entry(payload, agent=agent, suite=suite, tracer=tracer))
+    raise RuntimeError("evaluate_inbox_entry_sync() cannot run inside an active event loop; use evaluate_inbox_entry() instead")
+
+
+def ingest_mirror_entry(
+    payload: dict[str, Any],
+    *,
+    db_path: str | None = None,
+) -> str:
+    repository = Repository(SQLiteDatabase(db_path or "agenteval.sqlite3"))
+    return repository.save_mirror_inbox_entry(payload)

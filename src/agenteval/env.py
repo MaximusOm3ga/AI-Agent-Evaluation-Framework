@@ -1,49 +1,47 @@
-from__future__importannotations
+from __future__ import annotations
 
-importos
-frompathlibimportPath
+import os
+from pathlib import Path
 
 
-def_candidate_paths()->list[Path]:
-    cwd=Path.cwd()
-paths:list[Path]=[]
-seen:set[Path]=set()
-forbasein[cwd,*cwd.parents]:
-        env_path=base/".env"
-ifenv_pathnotinseen:
+def _candidate_paths() -> list[Path]:
+    cwd = Path.cwd()
+    paths: list[Path] = []
+    seen: set[Path] = set()
+    for base in [cwd, *cwd.parents]:
+        env_path = base / ".env"
+        if env_path not in seen:
             paths.append(env_path)
-seen.add(env_path)
-returnpaths
+            seen.add(env_path)
+    return paths
 
 
-defload_env(path:str|os.PathLike[str]|None=None)->None:
-    """Load the first available .env file without overriding already-set environment variables."""
-candidates:list[Path]=[]
-ifpathisnotNone:
+def load_env(path: str | os.PathLike[str] | None = None) -> None:
+    candidates: list[Path] = []
+    if path is not None:
         candidates.append(Path(path))
-candidates.extend(_candidate_paths())
+    candidates.extend(_candidate_paths())
 
-seen:set[Path]=set()
-forcandidateincandidates:
-        normalized=candidate.resolve(strict=False)
-ifnormalizedinseen:
+    seen: set[Path] = set()
+    for candidate in candidates:
+        normalized = candidate.resolve(strict=False)
+        if normalized in seen:
             continue
-seen.add(normalized)
-ifnotcandidate.exists():
+        seen.add(normalized)
+
+        if not normalized.exists():
             continue
 
-try:
-            fromdotenvimportload_dotenv
+        try:
+            from dotenv import load_dotenv
 
-load_dotenv(candidate,override=False)
-return
-exceptException:
-            forlineincandidate.read_text(encoding="utf-8").splitlines():
-                stripped=line.strip()
-ifnotstrippedorstripped.startswith("#")or"="notinstripped:
+            load_dotenv(normalized, override=False)
+            return
+        except Exception:
+            for line in normalized.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#") or "=" not in stripped:
                     continue
-key,value=stripped.split("=",1)
-key=key.strip()
-value=value.strip().strip('"').strip("'")
-os.environ.setdefault(key,value)
-return
+                key, value = stripped.split("=", 1)
+                os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+            return

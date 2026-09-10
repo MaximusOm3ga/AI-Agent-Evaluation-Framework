@@ -5,6 +5,7 @@ from importlib import import_module
 from pathlib import Path
 import json
 import sys
+import runpy
 
 from .. import (
     AnswerCorrectness,
@@ -20,14 +21,33 @@ from .. import (
     ToolErrorHandling,
     ToolSelection,
     evaluate,
+    evaluate_inbox_entry,
+    evaluate_inbox_entry_sync,
+    ingest_mirror_entry,
 )
 from ..storage.database import SQLiteDatabase
 from ..storage.repositories import Repository
 
 
 def _load_callable(ref: str):
+    if ":" in ref and ref.lower().split(":", 1)[0].endswith(".py"):
+        path_text, attr = ref.split(":", 1)
+        path = Path(path_text)
+        if not path.is_absolute():
+            path = Path(path_text).resolve()
+        if not path.exists():
+            raise FileNotFoundError(path)
+        module = runpy.run_path(str(path))
+        return module[attr]
     module_name, _, attr = ref.partition(":")
-    module = import_module(module_name)
+    try:
+        module = import_module(module_name)
+    except ModuleNotFoundError:
+        path = Path(module_name if module_name.endswith(".py") else f"{module_name}.py")
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        module = runpy.run_path(str(path))
+        return module[attr]
     return getattr(module, attr)
 
 
@@ -53,6 +73,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     report_cmd = sub.add_parser("report")
     report_cmd.add_argument("experiment_id")
+
+    inbox_cmd = sub.add_parser("inbox")
+    inbox_cmd.add_argument("payload")
+    inbox_cmd.add_argument("--agent")
+
+    mirror_cmd = sub.add_parser("mirror")
+    mirror_cmd.add_argument("payload")
+    mirror_cmd.add_argument("--db", default="agenteval.sqlite3")
+    mirror_cmd.add_argument("--jsonl", action="store_true")
+    mirror_cmd.add_argument("--status", default="pending")
+
+    evaluate_cmd = sub.add_parser("evaluate")
+    evaluate_cmd.add_argument("payload")
+    evaluate_cmd.add_argument("--agent", required=True)
+    evaluate_cmd.add_argument("--jsonl", action="store_true")
 
     return parser
 
@@ -159,6 +194,58 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_inbox(args: argparse.Namespace) -> int:
+    payload_path = Path(args.payload)
+    text = payload_path.read_text(encoding="utf-8")
+    entries = _load_payloads(text, jsonl=False)
+    for payload in entries:
+        print(payload)
+    return 0
+
+
+def cmd_mirror(args: argparse.Namespace) -> int:
+    payload_path = Path(args.payload)
+    text = payload_path.read_text(encoding="utf-8")
+    payloads = _load_payloads(text, jsonl=args.jsonl)
+    repository = Repository(SQLiteDatabase(args.db))
+    entry_ids: list[str] = []
+    for payload in payloads:
+        if args.status:
+            payload = {**payload, "status": args.status}
+        entry_ids.append(repository.save_mirror_inbox_entry(payload))
+    for entry_id in entry_ids:
+        print(entry_id)
+    return 0
+
+
+def cmd_evaluate(args: argparse.Namespace) -> int:
+    payload_path = Path(args.payload)
+    text = payload_path.read_text(encoding="utf-8")
+    payloads = _load_payloads(text, jsonl=args.jsonl)
+    agent = _load_callable(args.agent)
+    suite = _default_suite()
+    for payload in payloads:
+        result = evaluate_inbox_entry_sync(payload, agent=agent, suite=suite)
+        print(result.detailed_summary())
+        print()
+    return 0
+
+
+def _load_payloads(text: str, *, jsonl: bool) -> list[dict[str, object]]:
+    if jsonl:
+        payloads: list[dict[str, object]] = []
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            payloads.append(json.loads(line))
+        return payloads
+    data = json.loads(text)
+    if isinstance(data, list):
+        return data
+    return [data]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -172,6 +259,12 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_failures(args)
     if args.command == "report":
         return cmd_report(args)
+    if args.command == "inbox":
+        return cmd_inbox(args)
+    if args.command == "mirror":
+        return cmd_mirror(args)
+    if args.command == "evaluate":
+        return cmd_evaluate(args)
     return 1
 
 

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import asdict
 from typing import Any
 from uuid import uuid4
-import json
 
 from ..core.models import Dataset, DatasetCase, Event, Run, Trace, dumps, loads
 from ..core.results import EvaluationResult
@@ -165,6 +163,36 @@ class Repository:
         with self.database.connect() as connection:
             rows = connection.execute(query, params).fetchall()
             return [self.load_run(row["id"]) for row in rows]
+
+
+    def save_mirror_inbox_entry(self, payload: dict[str, Any]) -> str:
+        with self.database.connect() as connection:
+            entry_id = uuid4().hex
+            connection.execute(
+                "INSERT OR REPLACE INTO inbox_entries (id, source, payload_json, created_at, status) VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)",
+                (entry_id, payload.get("source", "shadow_log"), _dump(payload), payload.get("status", "pending")),
+            )
+            return entry_id
+
+    def list_inbox_entries(self, status: str | None = None) -> list[dict[str, Any]]:
+        query = "SELECT * FROM inbox_entries"
+        params: tuple[Any, ...] = ()
+        if status is not None:
+            query += " WHERE status = ?"
+            params = (status,)
+        query += " ORDER BY created_at"
+        with self.database.connect() as connection:
+            rows = connection.execute(query, params).fetchall()
+            items: list[dict[str, Any]] = []
+            for row in rows:
+                items.append({
+                    "id": row["id"],
+                    "source": row["source"],
+                    "payload": loads(row["payload_json"]),
+                    "created_at": row["created_at"],
+                    "status": row["status"],
+                })
+            return items
 
     def list_evaluation_results(self, run_id: str) -> list[EvaluationResult]:
         with self.database.connect() as connection:
