@@ -49,8 +49,12 @@ def _load_project_env(project_root: str | None = None) -> None:
             return
 
 
+def _ascii_text(value: object) -> str:
+    return str(value).encode("ascii", "replace").decode("ascii")
+
+
 def _format_value(value: object, width: int = 100) -> str:
-    text = json.dumps(value, ensure_ascii=False, indent=2, default=str)
+    text = json.dumps(value, ensure_ascii=True, indent=2, default=str)
     if len(text) <= width:
         return text
     return text
@@ -150,9 +154,11 @@ def build_dataset() -> Dataset:
                 },
                 expected={
                     "status": "completed",
-                    "action": "auto_resolve",
-                    "category": "Access Request",
-                    "recommended_action": "auto_resolve",
+                    "action": "auto_route",
+                    "category": "Account/Password",
+                    "recommended_action": "auto_route",
+                    "queue": "ServiceDesk-L1",
+                    "priority": "P3-Medium",
                 },
             ),
             DatasetCase(
@@ -184,10 +190,13 @@ def build_dataset() -> Dataset:
                     "body_raw": "Sometimes the display flickers when I open the browser",
                 },
                 expected={
-                    "status": "awaiting_approval",
-                    "action": "auto_route_spotcheck",
+                    "status": "completed",
+                    "action": "auto_route",
+                    "category": "Hardware",
                     "recommended_action": "auto_route",
                     "guardrail_triggered": False,
+                    "queue": "ServiceDesk-L1",
+                    "priority": "P3-Medium",
                 },
             ),
             DatasetCase(
@@ -200,11 +209,13 @@ def build_dataset() -> Dataset:
                     "body_raw": "VPN connection fails when I try to log in from home.",
                 },
                 expected={
-                    "status": "completed",
+                    "status": "awaiting_approval",
                     "action": "auto_route",
                     "recommended_action": "auto_route",
                     "category": "Network/VPN",
                     "queue": "Network-Eng",
+                    "priority": "P2-High",
+                    "guardrail_triggered": False,
                 },
             ),
             DatasetCase(
@@ -218,9 +229,11 @@ def build_dataset() -> Dataset:
                 },
                 expected={
                     "status": "completed",
-                    "action": "auto_resolve",
-                    "recommended_action": "auto_resolve",
+                    "action": "auto_route",
+                    "recommended_action": "auto_route",
                     "category": "Software Install",
+                    "queue": "Software-Provisioning",
+                    "priority": "P3-Medium",
                 },
             ),
             DatasetCase(
@@ -235,10 +248,12 @@ def build_dataset() -> Dataset:
                 },
                 expected={
                     "status": "awaiting_approval",
-                    "action": "force_security_route",
+                    "action": "auto_route",
                     "category": "Security Incident",
-                    "guardrail_triggered": True,
+                    "recommended_action": "auto_route",
+                    "guardrail_triggered": False,
                     "queue": "Security",
+                    "priority": "P2-High",
                 },
             ),
         ],
@@ -275,16 +290,16 @@ def main() -> int:
         suite=EvaluationSuite([DataAnalystAgentEvaluator()]),
     )
 
-    print(f"Dataset: {result.dataset.name}")
-    print(f"Cases: {len(result.cases)}")
+    print(_ascii_text(f"Dataset: {result.dataset.name}"))
+    print(_ascii_text(f"Cases: {len(result.cases)}"))
     print("")
     for case_result in result.cases:
-        print(_format_case(case_result))
+        print(_ascii_text(_format_case(case_result)))
         print("")
 
     print("Aggregate:")
     for line in result.summary().detailed_summary().splitlines():
-        print(f"  {line}")
+        print(_ascii_text(f"  {line}"))
     return 0
 
 

@@ -17,8 +17,12 @@ if str(SRC) not in sys.path:
 from agenteval import EvaluationSuite, evaluate_inbox_entry_sync
 from agenteval.core.evaluator import Evaluator
 from agenteval.core.results import EvaluationResult
+from agenteval.env import load_env
 from agenteval.storage.database import SQLiteDatabase
 from agenteval.storage.repositories import Repository
+
+load_env(ROOT / ".env")
+load_env(Path(r"C:\Users\sauri\PycharmProjects\data-analyst-agent\.env"))
 
 
 class PolicyInvariantEvaluator(Evaluator):
